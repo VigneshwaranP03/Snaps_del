@@ -32,7 +32,7 @@ pipeline {
                         // List snapshots older than the specified date
                         bat """
                             aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
-                                --query "Snapshots[?StartTime<=\`$snapshotAgeDate\`].[SnapshotId, StartTime]" \
+                                --query "Snapshots[?StartTime<'$snapshotAgeDate'].[SnapshotId, StartTime]" \
                                 --output table
                         """
                     }
@@ -59,7 +59,7 @@ pipeline {
                         // Get snapshot IDs older than the specified date
                         def snapshotIds = bat(script: """
                             aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
-                                --query "Snapshots[?StartTime<=\`$snapshotAgeDate\`].SnapshotId" \
+                                --query "Snapshots[?StartTime<'$snapshotAgeDate'].SnapshotId" \
                                 --output text
                         """, returnStdout: true).trim().split("\n")
                         
