@@ -33,7 +33,7 @@ pipeline {
                         bat """
                             set SNAPSHOT_DATE=$snapshotAgeDate
                             aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
-                                --query "Snapshots[?StartTime<=\`$SNAPSHOT_DATE\`].[SnapshotId, StartTime]" \
+                                --query "Snapshots[?StartTime<$SNAPSHOT_DATE].[SnapshotId, StartTime]" \
                                 --output table
                         """
                     }
@@ -57,7 +57,7 @@ pipeline {
                         def snapshotIds = bat(script: """
                             set SNAPSHOT_DATE=\\$(powershell -Command \"(Get-Date).AddDays(-${DAYS_OLD}).ToString('yyyy-MM-ddTHH:mm:ssZ')\")
                             aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
-                                --query "Snapshots[?StartTime<=\`$SNAPSHOT_DATE\`].SnapshotId" \
+                                --query "Snapshots[?StartTime<$SNAPSHOT_DATE].SnapshotId" \
                                 --output text
                         """, returnStdout: true).trim().split("\n")
                         
