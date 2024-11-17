@@ -1,26 +1,14 @@
 pipeline {
     agent any
     environment {
-        AWS_REGION = 'eu-north-1'
-        DAYS_OLD = 0
-        AWS_CREDENTIALS_ID = 'AWS-credentials'
+        AWS_REGION = 'eu-north-1'                 // Your AWS region
+        DAYS_OLD = 0                             // Number of days to consider a snapshot "old"
+        AWS_CREDENTIALS_ID = 'AWS-credentials'   // Your AWS credentials ID in Jenkins
     }
     stages {
-        stage('Test AWS CLI') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: AWS_CREDENTIALS_ID
-                ]]) {
-                    script {
-                        echo "Testing AWS CLI installation..."
-                        bat 'aws --version'  // Ensure AWS CLI is accessible
-                    }
-                }
-            }
-        }
         stage('Clone Repository') {
             steps {
+                // Fetch code from GitHub
                 checkout scm
             }
         }
@@ -32,14 +20,12 @@ pipeline {
                 ]]) {
                     script {
                         echo "Listing EC2 snapshots older than ${DAYS_OLD} day(s)..."
-                        def daysOldInt = DAYS_OLD.toInteger()
-                        def calendar = Calendar.getInstance()
-                        calendar.add(Calendar.DAY_OF_YEAR, -daysOldInt)
-                        def formattedDate = calendar.getTime().format("yyyy-MM-dd'T'HH:mm:ss'Z'")
-                        echo "Calculated date: ${formattedDate}"
-                        bat """
-                            aws ec2 describe-snapshots --region $AWS_REGION \
-                                --query "Snapshots[?StartTime<'${formattedDate}'].[SnapshotId, StartTime]" \
+                        def accountId = sh(script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true).trim()
+                        echo "AWS Account ID: ${accountId}"
+                        
+                        sh """
+                            aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
+                                --query 'Snapshots[?StartTime<=\`date -d "$DAYS_OLD day ago" +"%Y-%m-%dT%H:%M:%SZ"\`].[SnapshotId, StartTime]' \
                                 --output table
                         """
                     }
@@ -54,18 +40,18 @@ pipeline {
                 ]]) {
                     script {
                         echo "Deleting EC2 snapshots older than ${DAYS_OLD} day(s)..."
-                        def daysOldInt = DAYS_OLD.toInteger()
-                        def calendar = Calendar.getInstance()
-                        calendar.add(Calendar.DAY_OF_YEAR, -daysOldInt)
-                        def formattedDate = calendar.getTime().format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                        def accountId = sh(script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true).trim()
+                        echo "AWS Account ID: ${accountId}"
+
                         def snapshotIds = sh(script: """
-                            aws ec2 describe-snapshots --region $AWS_REGION \
-                                --query "Snapshots[?StartTime<'${formattedDate}'].[SnapshotId]" \
+                            aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
+                                --query 'Snapshots[?StartTime<=\`date -d "$DAYS_OLD day ago" +"%Y-%m-%dT%H:%M:%SZ"\`].SnapshotId' \
                                 --output text
                         """, returnStdout: true).trim().split("\n")
+                        
                         snapshotIds.each { snapshotId ->
                             echo "Deleting snapshot ${snapshotId}"
-                            bat """
+                            sh """
                                 aws ec2 delete-snapshot --region $AWS_REGION --snapshot-id ${snapshotId}
                             """
                         }
