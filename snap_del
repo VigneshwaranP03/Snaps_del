@@ -21,8 +21,9 @@ pipeline {
                     script {
                         echo "Listing EC2 snapshots older than ${DAYS_OLD} day(s)..."
 
-                        // Calculate the date that is DAYS_OLD days ago and format it
-                        def dateFormat = new Date() - DAYS_OLD
+                        // Convert DAYS_OLD to an integer, and calculate the date that is DAYS_OLD days ago
+                        def daysOldInt = DAYS_OLD.toInteger()
+                        def dateFormat = new Date() - daysOldInt
                         def formattedDate = dateFormat.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
                         // Use 'sh' to run AWS CLI commands
@@ -44,8 +45,9 @@ pipeline {
                     script {
                         echo "Deleting EC2 snapshots older than ${DAYS_OLD} day(s)..."
 
-                        // Calculate the date that is DAYS_OLD days ago and format it
-                        def dateFormat = new Date() - DAYS_OLD
+                        // Convert DAYS_OLD to an integer, and calculate the date that is DAYS_OLD days ago
+                        def daysOldInt = DAYS_OLD.toInteger()
+                        def dateFormat = new Date() - daysOldInt
                         def formattedDate = dateFormat.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
 
                         // Get snapshot IDs of old snapshots
