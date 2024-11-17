@@ -1,32 +1,42 @@
 pipeline {
     agent any
     environment {
-        AWS_REGION = 'eu-north-1'               // Replace with your AWS region
-        DAYS_OLD = 0                            // Number of days to consider a snapshot "old"
-        AWS_CREDENTIALS_ID = 'AWS-credentials'  // Replace with the credentials ID for AWS in Jenkins
+        AWS_REGION = 'eu-north-1'
+        DAYS_OLD = 0
+        AWS_CREDENTIALS_ID = 'AWS-credentials'
     }
     stages {
+        stage('Test AWS CLI') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: AWS_CREDENTIALS_ID
+                ]]) {
+                    script {
+                        echo "Testing AWS CLI installation..."
+                        sh 'aws --version'  // Ensure AWS CLI is accessible
+                    }
+                }
+            }
+        }
         stage('Clone Repository') {
             steps {
-                // Fetch code from GitHub
                 checkout scm
             }
         }
         stage('List Old Snapshots') {
             steps {
                 withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: AWS_CREDENTIALS_ID
                 ]]) {
                     script {
                         echo "Listing EC2 snapshots older than ${DAYS_OLD} day(s)..."
-
-                        // Convert DAYS_OLD to an integer, and calculate the date that is DAYS_OLD days ago
                         def daysOldInt = DAYS_OLD.toInteger()
-                        def dateFormat = new Date() - daysOldInt
-                        def formattedDate = dateFormat.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
-
-                        // Use 'sh' to run AWS CLI commands
+                        def calendar = Calendar.getInstance()
+                        calendar.add(Calendar.DAY_OF_YEAR, -daysOldInt)
+                        def formattedDate = calendar.getTime().format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                        echo "Calculated date: ${formattedDate}"
                         sh """
                             aws ec2 describe-snapshots --region $AWS_REGION \
                                 --query "Snapshots[?StartTime<'${formattedDate}'].[SnapshotId, StartTime]" \
@@ -39,25 +49,20 @@ pipeline {
         stage('Delete Old Snapshots') {
             steps {
                 withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: AWS_CREDENTIALS_ID
                 ]]) {
                     script {
                         echo "Deleting EC2 snapshots older than ${DAYS_OLD} day(s)..."
-
-                        // Convert DAYS_OLD to an integer, and calculate the date that is DAYS_OLD days ago
                         def daysOldInt = DAYS_OLD.toInteger()
-                        def dateFormat = new Date() - daysOldInt
-                        def formattedDate = dateFormat.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
-
-                        // Get snapshot IDs of old snapshots
+                        def calendar = Calendar.getInstance()
+                        calendar.add(Calendar.DAY_OF_YEAR, -daysOldInt)
+                        def formattedDate = calendar.getTime().format("yyyy-MM-dd'T'HH:mm:ss'Z'")
                         def snapshotIds = sh(script: """
                             aws ec2 describe-snapshots --region $AWS_REGION \
                                 --query "Snapshots[?StartTime<'${formattedDate}'].[SnapshotId]" \
                                 --output text
                         """, returnStdout: true).trim().split("\n")
-
-                        // Loop through the snapshot IDs and delete them
                         snapshotIds.each { snapshotId ->
                             echo "Deleting snapshot ${snapshotId}"
                             sh """
