@@ -3,7 +3,7 @@ pipeline {
     environment {
         AWS_REGION = 'eu-north-1'              // Replace with your AWS region
         DAYS_OLD = 0                        // Number of days to consider a snapshot "old"
-        AWS_CREDENTIALS_ID = 'aws-credentials' // Replace with the credentials ID for AWS in Jenkins
+        AWS_CREDENTIALS_ID = 'AWS-credentials' // Replace with the credentials ID for AWS in Jenkins
     }
     stages {
         stage('Clone Repository') {
@@ -14,7 +14,7 @@ pipeline {
         }
         stage('List Old Snapshots') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: AWS_CREDENTIALS_ID]]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: AWS-credentials]]) {
                     script {
                         echo "Listing EC2 snapshots older than ${DAYS_OLD} day(s)..."
                         aws command: '''
