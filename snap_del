@@ -1,9 +1,9 @@
 pipeline {
     agent any
     environment {
-        AWS_REGION = 'eu-north-1'                 // Your AWS region
-        DAYS_OLD = 0                             // Number of days to consider a snapshot "old"
-        AWS_CREDENTIALS_ID = 'AWS-credentials'   // Your AWS credentials ID in Jenkins
+        AWS_REGION = 'eu-north-1'               // Your AWS region
+        DAYS_OLD = 0                            // Number of days to consider a snapshot "old"
+        AWS_CREDENTIALS_ID = 'AWS-credentials'  // Your AWS credentials ID in Jenkins
     }
     stages {
         stage('Clone Repository') {
@@ -20,16 +20,22 @@ pipeline {
                 ]]) {
                     script {
                         echo "Listing EC2 snapshots older than ${DAYS_OLD} day(s)..."
+                        
+                        // Get AWS account ID dynamically using the AWS CLI
                         def accountId = bat(script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true).trim()
                         echo "AWS Account ID: ${accountId}"
                         
-                        bat """
-    set SNAPSHOT_DATE=\\$(powershell -Command \"(Get-Date).AddDays(-${DAYS_OLD}).ToString('yyyy-MM-ddTHH:mm:ssZ')\")
-    aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
-        --query \"Snapshots[?StartTime<=\`$SNAPSHOT_DATE\`].[SnapshotId, StartTime]\" \
-        --output table
-"""
+                        // Calculate the date for the snapshots (using PowerShell)
+                        def dateCmd = "powershell -Command \"(Get-Date).AddDays(-${DAYS_OLD}).ToString('yyyy-MM-ddTHH:mm:ssZ')\""
+                        def snapshotAgeDate = bat(script: dateCmd, returnStdout: true).trim()
 
+                        // List snapshots older than the specified date
+                        bat """
+                            set SNAPSHOT_DATE=$snapshotAgeDate
+                            aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
+                                --query "Snapshots[?StartTime<=\`$SNAPSHOT_DATE\`].[SnapshotId, StartTime]" \
+                                --output table
+                        """
                     }
                 }
             }
@@ -42,15 +48,20 @@ pipeline {
                 ]]) {
                     script {
                         echo "Deleting EC2 snapshots older than ${DAYS_OLD} day(s)..."
-                        def accountId = sh(script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true).trim()
+                        
+                        // Get AWS account ID dynamically
+                        def accountId = bat(script: "aws sts get-caller-identity --query 'Account' --output text", returnStdout: true).trim()
                         echo "AWS Account ID: ${accountId}"
-
-                        def snapshotIds = sh(script: """
+                        
+                        // Get snapshot IDs older than the specified date
+                        def snapshotIds = bat(script: """
+                            set SNAPSHOT_DATE=\\$(powershell -Command \"(Get-Date).AddDays(-${DAYS_OLD}).ToString('yyyy-MM-ddTHH:mm:ssZ')\")
                             aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
-                                --query 'Snapshots[?StartTime<date -d "$DAYS_OLD day ago" +"%Y-%m-%dT%H:%M:%SZ"].SnapshotId' \
+                                --query "Snapshots[?StartTime<=\`$SNAPSHOT_DATE\`].SnapshotId" \
                                 --output text
                         """, returnStdout: true).trim().split("\n")
                         
+                        // Loop through each snapshot and delete it
                         snapshotIds.each { snapshotId ->
                             echo "Deleting snapshot ${snapshotId}"
                             bat """
