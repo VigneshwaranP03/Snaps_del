@@ -25,7 +25,7 @@ pipeline {
                         
                         bat """
                             aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
-                                --query 'Snapshots[?StartTime<=\`date -d "$DAYS_OLD day ago" +"%Y-%m-%dT%H:%M:%SZ"\`].[SnapshotId, StartTime]' \
+                                --query 'Snapshots[?StartTime<date -d "$DAYS_OLD day ago" +"%Y-%m-%dT%H:%M:%SZ"].[SnapshotId, StartTime]' \
                                 --output table
                         """
                     }
@@ -45,7 +45,7 @@ pipeline {
 
                         def snapshotIds = sh(script: """
                             aws ec2 describe-snapshots --region $AWS_REGION --owner-ids $accountId \
-                                --query 'Snapshots[?StartTime<=\`date -d "$DAYS_OLD day ago" +"%Y-%m-%dT%H:%M:%SZ"\`].SnapshotId' \
+                                --query 'Snapshots[?StartTime<date -d "$DAYS_OLD day ago" +"%Y-%m-%dT%H:%M:%SZ"].SnapshotId' \
                                 --output text
                         """, returnStdout: true).trim().split("\n")
                         
